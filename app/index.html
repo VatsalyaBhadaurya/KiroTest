@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VLA Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 0.25rem;
+      color: #f8fafc;
+    }
+    .subtitle { font-size: 0.85rem; color: #64748b; margin-bottom: 2rem; }
+
+    .card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 560px;
+      margin-bottom: 1.25rem;
+    }
+
+    label { font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.4rem; }
+
+    /* Drop zone */
+    #drop-zone {
+      border: 2px dashed #3b4263;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    #drop-zone.drag-over { border-color: #6366f1; background: #1a1d2e; }
+    #drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    #drop-zone .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    #drop-zone p { font-size: 0.85rem; color: #64748b; }
+    #drop-zone p span { color: #6366f1; }
+
+    #preview-wrap { margin-top: 1rem; display: none; }
+    #preview-wrap img {
+      width: 100%; max-height: 260px; object-fit: contain;
+      border-radius: 6px; border: 1px solid #2d3148;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      background: #131620;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      padding: 0.6rem 0.8rem;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus { border-color: #6366f1; }
+    input[type="text"]::placeholder { color: #475569; }
+
+    button#run-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    button#run-btn:hover { background: #4f46e5; }
+    button#run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Results */
+    #result-card { display: none; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: #1e3a5f;
+      color: #60a5fa;
+      margin-bottom: 0.75rem;
+    }
+
+    .action-block {
+      background: #131620;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #a5f3fc;
+    }
+
+    .scene-labels { margin-top: 1rem; }
+    .scene-labels h3 { font-size: 0.78rem; color: #64748b; margin-bottom: 0.5rem; }
+    .label-row {
+      display: flex; align-items: center; gap: 0.6rem;
+      margin-bottom: 0.35rem; font-size: 0.82rem;
+    }
+    .label-name { flex: 1; color: #cbd5e1; }
+    .label-bar-wrap { flex: 2; background: #131620; border-radius: 999px; height: 6px; overflow: hidden; }
+    .label-bar { height: 100%; background: #6366f1; border-radius: 999px; transition: width 0.4s; }
+    .label-score { width: 3.5rem; text-align: right; color: #64748b; font-size: 0.75rem; }
+
+    .meta { margin-top: 0.75rem; font-size: 0.75rem; color: #475569; display: flex; gap: 1rem; }
+    .meta span { display: flex; align-items: center; gap: 0.3rem; }
+
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid #3b4263;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg { color: #f87171; font-size: 0.85rem; margin-top: 0.5rem; display: none; }
+  </style>
+</head>
+<body>
+
+  <h1>⚡ VLA Agent</h1>
+  <p class="subtitle">Vision-Language Action Agent · CPU-optimized · CLIP ViT-B/32 INT8</p>
+
+  <!-- Upload card -->
+  <div class="card">
+    <label>Image</label>
+    <div id="drop-zone">
+      <input type="file" id="file-input" accept="image/*" />
+      <div class="icon">🖼️</div>
+      <p>Drop an image or <span>browse</span></p>
+    </div>
+    <div id="preview-wrap">
+      <img id="preview-img" src="" alt="preview" />
+    </div>
+  </div>
+
+  <!-- Instruction card -->
+  <div class="card">
+    <label for="instruction">Instruction (optional)</label>
+    <input type="text" id="instruction" placeholder="e.g. pick up the bottle" />
+  </div>
+
+  <!-- Run -->
+  <div class="card" style="padding: 0; border: none; background: transparent;">
+    <button id="run-btn" disabled>Run Agent</button>
+    <div class="spinner" id="spinner"></div>
+    <p class="error-msg" id="error-msg"></p>
+  </div>
+
+  <!-- Results -->
+  <div class="card" id="result-card">
+    <div class="badge">ACTION OUTPUT</div>
+    <div class="action-block" id="action-output"></div>
+
+    <div class="scene-labels">
+      <h3>SCENE UNDERSTANDING</h3>
+      <div id="labels-list"></div>
+    </div>
+
+    <div class="meta">
+      <span>⏱ <span id="meta-latency">—</span> ms total</span>
+      <span>🧠 <span id="meta-reasoning">—</span> ms reasoning</span>
+    </div>
+  </div>
+
+<script>
+  const dropZone   = document.getElementById('drop-zone');
+  const fileInput  = document.getElementById('file-input');
+  const previewWrap = document.getElementById('preview-wrap');
+  const previewImg = document.getElementById('preview-img');
+  const runBtn     = document.getElementById('run-btn');
+  const spinner    = document.getElementById('spinner');
+  const errorMsg   = document.getElementById('error-msg');
+  const resultCard = document.getElementById('result-card');
+
+  let selectedFile = null;
+
+  // Drag-over styling
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setFile(f);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(f) {
+    selectedFile = f;
+    const url = URL.createObjectURL(f);
+    previewImg.src = url;
+    previewWrap.style.display = 'block';
+    runBtn.disabled = false;
+    resultCard.style.display = 'none';
+    errorMsg.style.display = 'none';
+  }
+
+  runBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    runBtn.disabled = true;
+    spinner.style.display = 'block';
+    errorMsg.style.display = 'none';
+    resultCard.style.display = 'none';
+
+    const fd = new FormData();
+    fd.append('image', selectedFile);
+    const inst = document.getElementById('instruction').value.trim();
+    if (inst) fd.append('instruction', inst);
+
+    try {
+      const res = await fetch('/predict', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || res.statusText);
+      }
+      const data = await res.json();
+      renderResult(data);
+    } catch (e) {
+      errorMsg.textContent = '⚠ ' + e.message;
+      errorMsg.style.display = 'block';
+    } finally {
+      runBtn.disabled = false;
+      spinner.style.display = 'none';
+    }
+  });
+
+  function renderResult(data) {
+    // Action JSON
+    document.getElementById('action-output').textContent =
+      JSON.stringify(data.action, null, 2);
+
+    // Scene labels
+    const list = document.getElementById('labels-list');
+    list.innerHTML = '';
+    const maxScore = data.scene.top_labels[0]?.score || 1;
+    data.scene.top_labels.forEach(item => {
+      const pct = Math.max(0, Math.min(100, (item.score / maxScore) * 100));
+      list.innerHTML += `
+        <div class="label-row">
+          <span class="label-name">${item.label}</span>
+          <div class="label-bar-wrap"><div class="label-bar" style="width:${pct}%"></div></div>
+          <span class="label-score">${item.score.toFixed(3)}</span>
+        </div>`;
+    });
+
+    document.getElementById('meta-latency').textContent   = data.meta.total_ms.toFixed(0);
+    document.getElementById('meta-reasoning').textContent = data.meta.reasoning_ms.toFixed(0);
+
+    resultCard.style.display = 'block';
+  }
+</script>
+</body>
+</html>
