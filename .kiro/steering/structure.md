@@ -30,3 +30,6 @@
 - Tests use `unittest.mock.patch` to avoid loading real CLIP weights; reset module globals in `autouse` fixtures
 - Test classes group by requirement (e.g. `TestEncodeImageOutput`, `TestResizeGuard`)
 - No GPU-specific code; never call `.cuda()` or check `torch.cuda.is_available()`
+efqeeaf
+
+
