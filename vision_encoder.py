@@ -32,10 +32,16 @@ def _load_model():
             "ViT-B-32", pretrained="openai"
         )
         _model.eval()
-        # Quantize to INT8 for faster CPU inference
+        # Quantize to INT8 for faster CPU inference (Requirement 5.2)
         _model = torch.quantization.quantize_dynamic(
             _model, {torch.nn.Linear}, dtype=torch.qint8
         )
+        # Confirm quantization was applied
+        quantized_layers = [
+            name for name, mod in _model.named_modules()
+            if isinstance(mod, torch.nn.quantized.dynamic.Linear)
+        ]
+        print(f"[VisionEncoder] INT8 quantization applied to {len(quantized_layers)} Linear layer(s).")
         print("[VisionEncoder] Model ready (INT8 quantized).")
     return _model, _preprocess
 
@@ -51,6 +57,9 @@ def encode_image(image: Image.Image) -> Tuple[np.ndarray, float]:
     model, preprocess = _load_model()
 
     t0 = time.perf_counter()
+    # Requirement 1.5: ensure 224×224 regardless of original dimensions
+    if image.size != (224, 224):
+        image = image.resize((224, 224), Image.LANCZOS)
     tensor = preprocess(image).unsqueeze(0)          # [1, 3, 224, 224]
     with torch.no_grad():
         features = model.encode_image(tensor)        # [1, 512]
